@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexus Pro Online - Premium Store</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #ff385c;
+            --primary-dark: #e31c5f;
+            --secondary: #00f2ff;
+            --dark: #0f172a;
+            --slate-custom: #f8fafc;
+            --glass: rgba(255, 255, 255, 0.95);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--slate-custom);
+            color: var(--dark);
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        /* --- PRELOADER --- */
+        #loader {
+            position: fixed; inset: 0; background: white; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .spinner {
+            width: 60px; height: 60px; border: 6px solid #f3f3f3;
+            border-top: 6px solid var(--primary); border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- UI ELEMENTS --- */
+        .premium-card {
+            background: white; border-radius: 2.5rem;
+            box-shadow: 0 15px 45px -15px rgba(0,0,0,0.06);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(0,0,0,0.03);
+            position: relative; overflow: hidden;
+        }
+        .premium-card:active { transform: scale(0.96); }
+
+        .discount-badge {
+            position: absolute; top: 12px; left: 12px;
+            background: rgba(255, 56, 92, 0.1);
+            color: var(--primary); padding: 4px 10px; border-radius: 12px;
+            font-size: 10px; font-weight: 800; z-index: 10;
+        }
+
+        .diamond-badge {
+            position: absolute; top: 12px; left: 12px;
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981; padding: 4px 10px; border-radius: 12px;
+            font-size: 10px; font-weight: 800; z-index: 10;
+        }
+
+        .quantity-control {
+            display: flex; align-items: center; gap: 15px;
+            background: #f1f5f9; padding: 8px 15px; border-radius: 1.5rem;
+        }
+
+        .glass-nav {
+            background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(25px);
+            border-radius: 3.5rem; border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 30px 60px -15px rgba(0,0,0,0.6);
+        }
+
+        /* --- PAGE ANIMATIONS --- */
+        .page { display: none; padding-top: 140px; padding-bottom: 160px; transition: 0.5s; }
+        .page-active { display: block !important; animation: slideIn 0.5s forwards; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            box-shadow: 0 10px 25px -5px rgba(255, 56, 92, 0.4);
+        }
+        
+        .btn-diamond {
+            background: linear-gradient(135deg, #059669, #10b981);
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4);
+        }
+
+        ::-webkit-scrollbar { width: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <p class="mt-6 font-black text-slate-400 text-[10px] tracking-[0.3em] uppercase">Nexus Engine Loading</p>
+    </div>
+
+    <header class="fixed top-0 w-full bg-white/80 backdrop-blur-2xl z-[1000] px-6 py-6 flex justify-between items-center border-b border-slate-50">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-slate-900 rounded-[1.2rem] p-1 shadow-2xl rotate-3">
+                <img id="app-logo" src="https://cdn-icons-png.flaticon.com/512/3081/3081840.png" class="w-full h-full object-cover rounded-lg">
+            </div>
+            <div>
+                <h1 id="app-name" class="font-black text-xl tracking-tighter uppercase text-slate-900 leading-none">NEXUS STORE</h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Server Verified</span>
+                </div>
+            </div>
+        </div>
+        <div onclick="nav('diamond-page')" class="bg-amber-50 border border-amber-100 px-5 py-2.5 rounded-2xl flex items-center gap-3 active:scale-90 transition cursor-pointer">
+            <i class="fa fa-gem text-amber-500"></i>
+            <span id="header-coins" class="font-black text-sm text-amber-700">0</span>
+        </div>
+    </header>
+
+    <div id="search-bar" class="fixed top-[105px] w-full px-6 z-[990]">
+        <div class="bg-white shadow-2xl border border-slate-100 flex items-center px-6 py-4 rounded-[2rem]">
+            <i class="fa fa-search text-slate-300 mr-4 text-lg"></i>
+            <input type="text" id="search-input" oninput="doSearch()" placeholder="Search premium items..." class="w-full bg-transparent outline-none font-bold text-sm text-slate-700">
+        </div>
+    </div>
+
+    <main id="home-page" class="page page-active px-6 pt-[200px]">
+        <div class="flex justify-between items-end mb-8">
+            <h2 class="text-4xl font-black italic uppercase tracking-tighter leading-none">Flash<br><span class="text-rose-500">Inventory</span></h2>
+            <div class="bg-rose-50 px-3 py-1 rounded-full text-[9px] font-black text-rose-500 uppercase">Live Now</div>
+        </div>
+        <div id="products-grid" class="grid grid-cols-2 gap-5">
+            </div>
+    </main>
+
+    <main id="diamond-page" class="page px-6 pt-[140px]">
+        <div class="premium-card p-8 mb-8 bg-gradient-to-r from-amber-200 to-yellow-400 text-amber-900">
+            <h2 class="text-3xl font-black italic uppercase tracking-tighter">Diamond<br>Store</h2>
+            <p class="text-xs font-bold mt-2 opacity-80">Redeem your earned coins here for free rewards!</p>
+            <div class="mt-4 font-black text-2xl flex items-center gap-2">
+                <i class="fa fa-gem"></i> <span id="shop-coins">0</span> Coins
+            </div>
+        </div>
+        
+        <div id="diamond-grid" class="grid grid-cols-2 gap-5">
+            </div>
+    </main>
+
+    <main id="cart-page" class="page px-6">
+        <h2 class="text-3xl font-black mb-8 italic uppercase tracking-tighter">Shopping<br>Basket</h2>
+        
+        <div id="cart-container" class="space-y-5 mb-10">
+            </div>
+        
+        <div id="checkout-form" class="hidden">
+            <div class="premium-card p-8 space-y-5 mb-8 border-dashed border-2">
+                <h4 class="font-black text-xs text-slate-400 uppercase tracking-widest">Shipping Destination</h4>
+                <div class="space-y-3">
+                    <input type="text" id="u-name" placeholder="Full Name" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:ring-2 ring-rose-500/20 transition">
+                    <input type="tel" id="u-phone" placeholder="WhatsApp Number (e.g. 017...)" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:ring-2 ring-rose-500/20 transition">
+                    <textarea id="u-address" placeholder="Detail House Address" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:ring-2 ring-rose-500/20 transition h-32"></textarea>
+                </div>
+                
+                <div class="pt-4">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2 mb-2 block">Delivery Region</label>
+                    <select id="u-area" onchange="updateTotal()" class="w-full bg-slate-900 text-white p-5 rounded-2xl font-bold text-sm outline-none appearance-none">
+                        <option value="inside">Inside City (Fast)</option>
+                        <option value="outside">Outside City (Regular)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+                <div class="relative z-10">
+                    <div class="flex justify-between mb-3 text-slate-400 font-bold uppercase text-[10px] tracking-widest">
+                        <span>Original Total</span>
+                        <span id="sub-total">৳0</span>
+                    </div>
+                    <div class="flex justify-between mb-3 text-emerald-400 font-bold uppercase text-[10px] tracking-widest">
+                        <span>Savings (Discount)</span>
+                        <span id="discount-total">-৳0</span>
+                    </div>
+                    <div class="flex justify-between mb-8 text-slate-400 font-bold uppercase text-[10px] tracking-widest">
+                        <span>Shipping Fee</span>
+                        <span id="del-fee">৳0</span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mb-10 border-t border-white/10 pt-8">
+                        <div>
+                            <p class="text-[10px] font-black text-slate-500 uppercase">Grand Total</p>
+                            <h2 id="final-total" class="text-4xl font-black text-white mt-1">৳0</h2>
+                        </div>
+                        <i class="fa fa-receipt text-3xl text-white/20"></i>
+                    </div>
+                    
+                    <button onclick="placeOrder()" class="w-full btn-primary py-6 rounded-[1.8rem] font-black text-sm uppercase tracking-widest active:scale-95 transition shadow-2xl">
+                        Dispatch Order
+                    </button>
+                </div>
+                <div class="absolute -right-20 -top-20 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl"></div>
+            </div>
+        </div>
+    </main>
+
+    <main id="profile-page" class="page px-6">
+        <div class="premium-card p-10 text-center mb-8 bg-gradient-to-b from-white to-slate-50">
+            <div class="relative w-32 h-32 mx-auto mb-6">
+                <div class="absolute inset-0 bg-rose-500 rounded-full animate-pulse opacity-20"></div>
+                <img id="pfp-img" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" class="relative w-full h-full rounded-full border-4 border-white shadow-2xl object-cover">
+                <label for="pfp-upload" class="absolute bottom-1 right-1 w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center text-white border-4 border-white shadow-lg cursor-pointer active:scale-75 transition">
+                    <i class="fa fa-pencil text-xs"></i>
+                </label>
+                <input type="file" id="pfp-upload" class="hidden" onchange="uploadPFP(event)">
+            </div>
+            <h3 class="font-black text-2xl text-slate-900 uppercase italic">Active Member</h3>
+            <p class="bg-slate-100 inline-block px-4 py-1.5 rounded-full text-[10px] font-black text-slate-500 uppercase tracking-tighter mt-3" id="profile-id">ID: LOADING</p>
+            
+            <button onclick="contactAdmin()" class="mt-6 w-full py-4 bg-green-500 text-white rounded-2xl font-bold shadow-lg shadow-green-200 active:scale-95 transition">
+                <i class="fab fa-whatsapp mr-2"></i> Contact Admin
+            </button>
+        </div>
+
+        <div class="flex items-center justify-between mb-6 px-2">
+            <h3 class="font-black text-xl uppercase italic"><i class="fa fa-box-open mr-2 text-rose-500"></i> My Orders</h3>
+            <span class="text-[10px] font-black text-slate-400" id="order-count">0 Orders</span>
+        </div>
+        <div id="order-history" class="space-y-4 pb-20"></div>
+    </main>
+
+    <div id="modal" class="fixed inset-0 bg-white z-[2000] hidden overflow-y-auto">
+        <div class="p-8 pt-24 max-w-2xl mx-auto">
+            <button onclick="closeModal()" class="fixed top-8 left-8 w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center z-[2010] shadow-sm active:scale-90 transition">
+                <i class="fa fa-chevron-left text-slate-900"></i>
+            </button>
+            
+            <div class="bg-slate-50 rounded-[3.5rem] p-12 mb-8 flex items-center justify-center relative">
+                <div id="m-discount-tag" class="absolute top-8 right-8 bg-rose-500 text-white px-4 py-2 rounded-2xl font-black text-xs">-৳50 OFF</div>
+                <img id="m-img" src="" class="w-64 h-64 object-contain drop-shadow-2xl">
+            </div>
+            
+            <div class="px-2">
+                <h1 id="m-name" class="text-4xl font-black text-slate-900 tracking-tighter mb-4">Product Name</h1>
+                
+                <p id="m-desc" class="text-slate-400 font-semibold leading-relaxed mb-8">
+                    Loading description...
+                </p>
+                
+                <div id="qty-section" class="flex items-center gap-6 mb-10">
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Quantity</p>
+                        <div class="quantity-control">
+                            <button onclick="adjustModalQty(-1)" class="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm"><i class="fa fa-minus text-[10px]"></i></button>
+                            <span id="m-qty" class="font-black text-lg w-6 text-center">1</span>
+                            <button onclick="adjustModalQty(1)" class="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm"><i class="fa fa-plus text-[10px]"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 rounded-[2.5rem] p-8 text-white flex justify-between items-center shadow-2xl">
+                    <div>
+                        <p class="text-[10px] uppercase font-black text-slate-500 mb-1">Price</p>
+                        <div class="flex items-center gap-3">
+                            <h2 id="m-price" class="text-4xl font-black text-white">৳0</h2>
+                            <span id="m-old-price" class="text-slate-500 line-through font-bold text-sm">৳0</span>
+                        </div>
+                    </div>
+                    <button id="add-btn" class="btn-primary text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-90 transition">
+                        Add To Bag
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="fixed bottom-8 left-8 right-8 h-24 glass-nav flex justify-around items-center z-[1000] px-4">
+        <button onclick="nav('home-page')" id="n-home" class="text-rose-500 text-2xl transition-all duration-300"><i class="fa-solid fa-house-chimney"></i></button>
+        
+        <button onclick="nav('diamond-page')" id="n-diamond" class="text-white/30 text-2xl transition-all duration-300 relative">
+            <i class="fa-solid fa-gem"></i>
+        </button>
+        
+        <button onclick="nav('cart-page')" id="n-cart" class="text-white/30 text-2xl transition-all duration-300 relative">
+            <i class="fa-solid fa-shopping-bag"></i>
+            <span id="cart-badge" class="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 rounded-full text-[10px] font-black flex items-center justify-center text-white border-4 border-slate-900 hidden">0</span>
+        </button>
+        <button onclick="nav('profile-page')" id="n-profile" class="text-white/30 text-2xl transition-all duration-300"><i class="fa-solid fa-user-ninja"></i></button>
+    </nav>
+
+    <script>
+        // --- CORE DATABASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBdjDJG4Znlhag91aNN-GN4HpqyWrYd88Y",
+            authDomain: "max-4c4ed.firebaseapp.com",
+            databaseURL: "https://max-4c4ed-default-rtdb.firebaseio.com",
+            projectId: "max-4c4ed",
+            storageBucket: "max-4c4ed.firebasestorage.app",
+            messagingSenderId: "721394651604",
+            appId: "1:721394651604:web:9f3cad794b348cb072c641"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- STATE MANAGEMENT ---
+        let USER_ID = localStorage.getItem('nexus_uid') || ('nx_' + Math.random().toString(36).substr(2, 9));
+        localStorage.setItem('nexus_uid', USER_ID);
+        
+        // WhatsApp defaults to BD code
+        let settings = { shipIn: 60, shipOut: 120, wa: "8801612886890" };
+        let products = [], cart = [], userCoins = 0;
+        let tempModalQty = 1;
+
+        // --- INITIALIZATION ---
+        function init() {
+            document.getElementById('profile-id').innerText = "ID: " + USER_ID.toUpperCase();
+
+            // Sync Settings
+            db.ref('settings').on('value', snap => {
+                if(snap.exists()) settings = { ...settings, ...snap.val() };
+                updateTotal();
+                document.getElementById('loader').style.display = 'none';
+            });
+
+            // Sync Products (Splitting into Normal and Diamond)
+            db.ref('products').on('value', snap => {
+                const homeGrid = document.getElementById('products-grid');
+                const diamondGrid = document.getElementById('diamond-grid');
+                
+                homeGrid.innerHTML = '';
+                diamondGrid.innerHTML = '';
+                
+                products = [];
+                
+                if(snap.exists()) {
+                    snap.forEach(child => {
+                        const p = { id: child.key, ...child.val() };
+                        products.push(p);
+                        
+                        // Check if it's a diamond product
+                        const isDiamond = p.type === 'diamond';
+                        const discount = p.discount || 0;
+                        const hasDiscount = discount > 0;
+
+                        const cardHtml = `
+                            <div class="premium-card p-5" onclick="openModal('${p.key || p.id}')">
+                                ${isDiamond 
+                                    ? `<div class="diamond-badge">FREE</div>` 
+                                    : (hasDiscount ? `<div class="discount-badge">-৳${discount} OFF</div>` : '')}
+                                
+                                <div class="h-40 flex items-center justify-center bg-slate-50 rounded-[2rem] mb-5">
+                                    <img src="${p.image}" class="h-32 w-32 object-contain drop-shadow-xl">
+                                </div>
+                                <h4 class="font-black text-xs uppercase truncate text-slate-800">${p.name}</h4>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <p class="font-black ${isDiamond ? 'text-amber-500' : 'text-rose-500'} text-lg">
+                                        ${isDiamond ? '<i class="fa fa-gem"></i> ' + p.price : '৳' + p.price}
+                                    </p>
+                                    ${(!isDiamond && hasDiscount) ? `<p class="text-[10px] text-slate-300 line-through font-bold">৳${Number(p.price) + Number(discount)}</p>` : ''}
+                                </div>
+                            </div>`;
+
+                        if (isDiamond) {
+                            diamondGrid.innerHTML += cardHtml;
+                        } else {
+                            homeGrid.innerHTML += cardHtml;
+                        }
+                    });
+                }
+                
+                if(diamondGrid.innerHTML === '') diamondGrid.innerHTML = '<p class="text-xs opacity-50 p-4 col-span-2 text-center">No rewards available yet.</p>';
+            });
+
+            // Sync User Profile
+            db.ref('users/' + USER_ID).on('value', snap => {
+                if(snap.exists()) {
+                    const data = snap.val();
+                    userCoins = data.coins || 0;
+                    document.getElementById('header-coins').innerText = userCoins;
+                    document.getElementById('shop-coins').innerText = userCoins;
+                    if(data.pfp) document.getElementById('pfp-img').src = data.pfp;
+                    renderHistory(data.orders);
+                } else {
+                    db.ref('users/' + USER_ID).set({ coins: 0, joined: Date.now() });
+                }
+            });
+        }
+
+        // --- PRODUCT MODAL LOGIC ---
+        window.openModal = (id) => {
+            const p = products.find(x => x.id === id);
+            if (!p) return;
+
+            tempModalQty = 1;
+            const isDiamond = p.type === 'diamond';
+
+            document.getElementById('m-qty').innerText = tempModalQty;
+            document.getElementById('m-name').innerText = p.name;
+            
+            // Dynamic Description (Fixed)
+            document.getElementById('m-desc').innerText = p.description || "This is a premium high-quality product. Guaranteed satisfaction.";
+            document.getElementById('m-img').src = p.image;
+            
+            const btn = document.getElementById('add-btn');
+            const qtySec = document.getElementById('qty-section');
+            const discountTag = document.getElementById('m-discount-tag');
+            const oldPriceTag = document.getElementById('m-old-price');
+
+            if(isDiamond) {
+                // Diamond Item Setup
+                document.getElementById('m-price').innerHTML = `<i class="fa fa-gem"></i> ${p.price}`;
+                oldPriceTag.classList.add('hidden');
+                discountTag.classList.add('hidden');
+                qtySec.classList.add('hidden'); // No quantity for rewards usually
+
+                btn.innerText = "REDEEM NOW";
+                btn.className = "btn-diamond text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-90 transition";
+                btn.onclick = () => redeemItem(p);
+            } else {
+                // Cash Item Setup
+                document.getElementById('m-price').innerText = "৳" + p.price;
+                qtySec.classList.remove('hidden');
+                
+                const discount = p.discount || 0;
+                if(discount > 0) {
+                    discountTag.innerText = `-৳${discount} OFF`;
+                    discountTag.classList.remove('hidden');
+                    oldPriceTag.innerText = "৳" + (Number(p.price) + Number(discount));
+                    oldPriceTag.classList.remove('hidden');
+                } else {
+                    discountTag.classList.add('hidden');
+                    oldPriceTag.classList.add('hidden');
+                }
+
+                btn.innerText = "ADD TO BAG";
+                btn.className = "btn-primary text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-90 transition";
+                btn.onclick = () => {
+                    addToCart(p, tempModalQty);
+                    closeModal();
+                    nav('cart-page');
+                };
+            }
+
+            document.getElementById('modal').classList.remove('hidden');
+        };
+
+        window.adjustModalQty = (val) => {
+            tempModalQty += val;
+            if(tempModalQty < 1) tempModalQty = 1;
+            document.getElementById('m-qty').innerText = tempModalQty;
+        };
+
+        window.closeModal = () => document.getElementById('modal').classList.add('hidden');
+
+        // --- DIAMOND REDEMPTION LOGIC ---
+        function redeemItem(p) {
+            if(userCoins < p.price) {
+                alert("Not enough coins! You need " + (p.price - userCoins) + " more.");
+                return;
+            }
+
+            if(!confirm(`Redeem ${p.name} for ${p.price} Coins?`)) return;
+
+            // Deduct Coins
+            db.ref('users/' + USER_ID).update({ coins: userCoins - Number(p.price) });
+
+            // Create Order Log for Reward
+            const orderId = 'REW' + Date.now().toString().slice(-6);
+            const orderObj = {
+                id: orderId,
+                items: `[REWARD] ${p.name}`,
+                total: '0 (Paid with Coins)',
+                status: 'pending',
+                time: Date.now()
+            };
+
+            db.ref('users/' + USER_ID + '/orders/' + orderObj.id).set(orderObj);
+            
+            // Notify Admin
+            const msg = `*💎 NEW REWARD REDEEMED*%0AUser ID: ${USER_ID}%0AItem: ${p.name}%0ACost: ${p.price} Coins`;
+            contactAdmin(msg);
+
+            closeModal();
+            alert("Redemption Successful! Admin will contact you.");
+        }
+
+        // --- CART LOGIC ---
+        function addToCart(product, qty) {
+            const existing = cart.find(item => item.id === product.id);
+            if(existing) {
+                existing.qty += qty;
+            } else {
+                cart.push({ ...product, qty: qty });
+            }
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const cDiv = document.getElementById('cart-container');
+            const badge = document.getElementById('cart-badge');
+            
+            badge.innerText = cart.length;
+            badge.classList.toggle('hidden', cart.length === 0);
+            
+            if(cart.length === 0) {
+                cDiv.innerHTML = `
+                    <div class="text-center py-24 opacity-20">
+                        <i class="fa fa-shopping-bag text-8xl mb-4"></i>
+                        <p class="font-black uppercase tracking-widest text-xs">Basket is Empty</p>
+                    </div>`;
+                document.getElementById('checkout-form').classList.add('hidden');
+            } else {
+                document.getElementById('checkout-form').classList.remove('hidden');
+                cDiv.innerHTML = cart.map((p, i) => `
+                    <div class="premium-card p-6 flex items-center gap-5">
+                        <img src="${p.image}" class="w-16 h-16 object-contain bg-slate-50 rounded-2xl p-2">
+                        <div class="flex-1">
+                            <h4 class="font-black text-[11px] uppercase text-slate-800 leading-tight">${p.name}</h4>
+                            <p class="font-black text-rose-500 mt-1 text-sm">৳${p.price}</p>
+                        </div>
+                        <div class="flex flex-col items-end gap-3">
+                            <button onclick="removeFromCart(${i})" class="text-slate-300 hover:text-rose-500"><i class="fa fa-times-circle"></i></button>
+                            <div class="quantity-control scale-75 origin-right">
+                                <button onclick="updateQty(${i}, -1)" class="w-8 h-8 flex items-center justify-center bg-white rounded-xl"><i class="fa fa-minus"></i></button>
+                                <span class="font-black text-lg">${p.qty}</span>
+                                <button onclick="updateQty(${i}, 1)" class="w-8 h-8 flex items-center justify-center bg-white rounded-xl"><i class="fa fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>`).join('');
+                updateTotal();
+            }
+        }
+
+        window.updateQty = (index, val) => {
+            cart[index].qty += val;
+            if(cart[index].qty < 1) cart.splice(index, 1);
+            updateCartUI();
+        };
+
+        window.removeFromCart = (index) => {
+            cart.splice(index, 1);
+            updateCartUI();
+        };
+
+        window.updateTotal = () => {
+            let subTotal = 0;
+            let discountTotal = 0;
+
+            cart.forEach(item => {
+                subTotal += (Number(item.price) + Number(item.discount || 0)) * item.qty;
+                discountTotal += (Number(item.discount || 0)) * item.qty;
+            });
+
+            const area = document.getElementById('u-area').value;
+            const ship = area === 'inside' ? Number(settings.shipIn) : Number(settings.shipOut);
+            
+            const final = (subTotal - discountTotal) + ship;
+
+            document.getElementById('sub-total').innerText = "৳" + subTotal;
+            document.getElementById('discount-total').innerText = "-৳" + discountTotal;
+            document.getElementById('del-fee').innerText = "৳" + ship;
+            document.getElementById('final-total').innerText = "৳" + final;
+        };
+
+        // --- ORDER PLACEMENT (FIXED WHATSAPP) ---
+        window.placeOrder = () => {
+            const n = document.getElementById('u-name').value;
+            const ph = document.getElementById('u-phone').value;
+            const ad = document.getElementById('u-address').value;
+            const total = document.getElementById('final-total').innerText;
+
+            if(!n || !ph || !ad) {
+                alert("Please provide full contact and address details!");
+                return;
+            }
+
+            const orderId = 'ORD' + Date.now().toString().slice(-6);
+            const itemsSummary = cart.map(x => `${x.name} (x${x.qty})`).join(", ");
+
+            const orderObj = {
+                id: orderId,
+                items: itemsSummary,
+                total: total,
+                status: 'pending',
+                time: Date.now()
+            };
+
+            const key = db.ref('orders').push().key;
+            db.ref('orders/' + key).set({ ...orderObj, userId: USER_ID, name: n, phone: ph, address: ad });
+            db.ref('users/' + USER_ID + '/orders/' + key).set(orderObj);
+            
+            // Add Reward Coins (+10 per order)
+            db.ref('users/' + USER_ID).update({ coins: userCoins + 10 });
+
+            // WA Notification (Encoded)
+            const msg = `*🚀 NEW NEXUS ORDER*%0A--------------------------%0AID: ${orderId}%0AName: ${n}%0APhone: ${ph}%0AItems: ${itemsSummary}%0A*Total: ${total}*%0A--------------------------%0AAddress: ${ad}`;
+            contactAdmin(msg);
+
+            cart = [];
+            updateCartUI();
+            nav('profile-page');
+            alert("Order Dispatched Successfully! +10 Coins Earned.");
+        };
+
+        // --- HELPER: WHATSAPP LINK ---
+        window.contactAdmin = (customMsg = null) => {
+            // Ensure phone has country code (BD)
+            let phone = settings.wa.toString().replace(/\D/g, ''); // Remove non-digits
+            if(!phone.startsWith('88')) phone = '88' + phone;
+            
+            const text = customMsg || `Hello Admin, I need help with my User ID: ${USER_ID}`;
+            window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+        };
+
+        // --- PROFILE LOGICS ---
+        function renderHistory(orders) {
+            const hDiv = document.getElementById('order-history');
+            const countSpan = document.getElementById('order-count');
+            hDiv.innerHTML = '';
+            
+            if(!orders) {
+                countSpan.innerText = "0 Orders";
+                hDiv.innerHTML = '<div class="text-center py-10 opacity-20 font-bold uppercase text-[10px]">No Order Logs</div>';
+                return;
+            }
+
+            const entries = Object.values(orders).reverse();
+            countSpan.innerText = entries.length + " Orders";
+
+            entries.forEach(o => {
+                const statusColor = o.status === 'pending' ? 'bg-amber-500' : (o.status === 'cancelled' ? 'bg-rose-500' : 'bg-green-500');
+                hDiv.innerHTML += `
+                    <div class="premium-card p-6 flex justify-between items-center">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="w-2 h-2 rounded-full ${statusColor}"></span>
+                                <span class="text-[10px] font-black uppercase text-slate-400">#${o.id}</span>
+                            </div>
+                            <p class="font-black text-xs text-slate-800 leading-tight">${o.items}</p>
+                            <p class="text-[9px] font-bold text-slate-400 mt-2 italic">${new Date(o.time).toLocaleString()}</p>
+                        </div>
+                        <h4 class="font-black text-rose-500 text-sm">${o.total}</h4>
+                    </div>`;
+            });
+        }
+
+        window.uploadPFP = (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (f) => {
+                db.ref('users/' + USER_ID).update({ pfp: f.target.result });
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // --- NAVIGATION ---
+        window.nav = (id) => {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('page-active'));
+            document.getElementById(id).classList.add('page-active');
+            
+            document.querySelectorAll('nav button').forEach(b => b.classList.replace('text-rose-500', 'text-white/30'));
+            
+            // Handle Diamond Icon Logic
+            const btnId = 'n-' + id.split('-')[0];
+            if(document.getElementById(btnId)) {
+                document.getElementById(btnId).classList.replace('text-white/30', 'text-rose-500');
+            }
+            
+            document.getElementById('search-bar').style.display = (id === 'home-page') ? 'block' : 'none';
+            window.scrollTo(0,0);
+        };
+
+        init();
+    </script>
+</body>
+</html>
